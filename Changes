@@ -1,15 +1,19 @@
 
 RCS file: /home/nwiger/perlmod/lib/HTML/RCS/QuickTable.pm,v
 Working file: /home/nwiger/perlmod/lib/HTML/QuickTable.pm
-head: 1.10
+head: 1.11
 branch:
 locks: strict
 access list:
 symbolic names:
 keyword substitution: kv
-total revisions: 10;	selected revisions: 10
+total revisions: 11;	selected revisions: 11
 description:
 HTML::QuickTable - Quickly create fairly complex HTML tables
+----------------------------
+revision 1.11
+date: 2003/10/16 00:24:43;  author: nwiger;  state: Exp;  lines: +58 -34
+fixed a couple bugs, including _expopts prototyping warning, plus docs/tests
 ----------------------------
 revision 1.10
 date: 2002/08/29 18:10:57;  author: nwiger;  state: Exp;  lines: +55 -23

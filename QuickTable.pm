@@ -25,37 +25,15 @@ HTML::QuickTable - Quickly create fairly complex HTML tables
 
 use Carp;
 use strict;
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+use vars qw($VERSION);
 
-$VERSION = do { my @r=(q$Revision: 1.10 $=~/\d+/g); sprintf "%d."."%02d"x$#r,@r };
+$VERSION = do { my @r=(q$Revision: 1.11 $=~/\d+/g); sprintf "%d."."%02d"x$#r,@r };
 
 # Global counter to allow multiple render()'s with only one header
 my $SENT_HEADER = 0;
 my $L = 0;
 
-sub new {
-    my $self = shift;
-    my $class = ref($self) || $self;
-    my %opt = _expopts(@_);
-
-    # counter
-    $opt{_level} = 0;
-
-    # special options
-    $opt{table}{border} = delete $opt{border} if $opt{border};  # legacy
-    $opt{body} ||= {bgcolor => 'white'};
-    $opt{null} ||= '';      # prevents warnings
-
-    # setup our font tag separately
-    # do this here or else every call to render() must do it
-    ($opt{_fo}, $opt{_fc}) = $opt{font}
-                                ? (_tag('font', %{$opt{font}}), '</font>')
-                                : ('','');
-
-    return bless \%opt, $class;
-}
-
-sub _expopts (@) {
+sub _expopts {
     # This is a general-purpose option-parsing routine that
     # puts stuff down one level if it has a _ in it; this
     # allows stuff like "td_height => 50" and "td => {height => 50}"
@@ -85,6 +63,29 @@ sub _expopts (@) {
     }
     $L--;
     return wantarray ? %opt : \%opt;
+}
+
+sub new {
+    my $self = shift;
+    my $class = ref($self) || $self;
+    my %opt = _expopts(@_);
+
+    # counters
+    $opt{_level} = 0;
+    $SENT_HEADER = 0;
+
+    # special options
+    $opt{table}{border} = delete $opt{border} if exists $opt{border};  # legacy
+    $opt{body} ||= {bgcolor => 'white'};
+    $opt{null} ||= '';      # prevents warnings
+
+    # setup our font tag separately
+    # do this here or else every call to render() must do it
+    ($opt{_fo}, $opt{_fc}) = $opt{font}
+                                ? (_tag('font', %{$opt{font}}), '</font>')
+                                : ('','');
+
+    return bless \%opt, $class;
 }
 
 # Internal tag routines stolen from CGI::FormBuilder, which
@@ -213,10 +214,15 @@ sub render {
                 # For an array, we do not generate <th> each time, only the first
                 # time per the row/column
                 my $td = 'td';
-                if ($self->{labels} && $self->{labels} =~ /[Ll]/ && ! $colnum) {
-                    $td = 'th';
-                } elsif ($self->{labels} && $self->{labels} =~ /[1Tt]/ && ! $self->{_notfirstrow}) {
-                    $td = 'th';
+                if (my $l = $self->{labels}) {
+                    if (($l =~ /[1T]/i && ! $self->{_notfirstrow})
+                      || ($l =~ /L/i && ! $colnum)
+                      || ($l =~ /R/i && $colnum == (@tmprow-1))
+                    ) {
+                        $td = 'th';
+                    } elsif ($l =~ /B/i && ! $self->{_notfirstrow}) {
+                        croak "Sorry, labels => 'B' is currently broken - want to patch it?";
+                    }
                 }
                 # Recurse data structures
                 if (ref $row) {
@@ -314,10 +320,13 @@ sub render {
     }
 
     if ($self->{header} && ! $self->{_level} && ! $SENT_HEADER++) {
-        my $title = $self->{title} ? "<h3>$self->{title}</h3>" : '';
+        my $title = $self->{title} ? "<title>$self->{title}</title>" : '';
+        my $h3    = $self->{title} ? "<h3>$self->{title}</h3>" : '';
+        my $text  = $self->{text} || '';
         $html = "Content-type: text/html\n\n<html>"
-              . _tag('body', %{$self->{body}}) . "<title>$self->{title}</title>"
-              . $title . $html . "</body></html>\n";
+              . _tag('head', %{$self->{head}}) . $title . '</head>'
+              . _tag('body', %{$self->{body}}) . _tag('font', %{$self->{font}})
+              . $h3 . $text . $html . "</font></body></html>\n";
     }
 
     # detect what row we're in by counting down and up
@@ -478,6 +487,11 @@ data is expanded. Instead of walking the data structure and building
 rows horizontally, each element of data will become a column. This
 will be described more below under C<render()>.
 
+=item text => 'string'
+
+Just like B<FormBuilder>, this text is printed out for you to easily
+annotate your table.
+
 =item body => {opt => val, opt => val}
 
 =item font => {opt => val, opt => val}
@@ -612,13 +626,23 @@ label would be "user".
 
 =back
 
+=head1 NOTES
+
+The 'B' option to 'labels' is currently broken, due to the fact that
+C<render()> recursively calls itself and thus loses track of where
+it is. But who the heck puts labels at the I<bottom> of an HTML table??
+
+If you run into a bug, please DO NOT submit it via C<rt.cpan.org>, it 
+causes me alot of extra work. Email me at the below address, and include
+the version string your eyes are about to pass over.
+
 =head1 VERSION
 
-$Id: QuickTable.pm,v 1.10 2002/08/29 18:10:57 nwiger Exp $
+$Id: QuickTable.pm,v 1.11 2003/10/16 00:24:43 nwiger Exp $
 
 =head1 AUTHOR
 
-Copyright (c) 2001-2002 Nathan Wiger <nate@wiger.org>. All Rights Reserved.
+Copyright (c) 2001-2003 Nathan Wiger <nate@wiger.org>. All Rights Reserved.
 
 This module is free software; you may copy this under the terms of
 the GNU General Public License, or the Artistic License, copies of

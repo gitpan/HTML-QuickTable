@@ -28,8 +28,8 @@ DESCRIPTION
         my $qt = HTML::QuickTable->new;
         print $qt->render(\@data);
 
-    Where @data would be an array holding your data structure. For example,
-    the data structure:
+    Where "@data" would be an array holding your data structure. For
+    example, the data structure:
 
         @data = (
             [ 'nwiger', 'Nathan Wiger', 'x43264', 'nate@wiger.org' ],
@@ -62,7 +62,8 @@ DESCRIPTION
 
 FUNCTIONS
   new(opt => val, opt => val)
-    The "new()" function takes a list of options and returns a $qt object,
+
+    The "new()" function takes a list of options and returns a "$qt" object,
     which can then be used to "render()" different data. The "new()"
     function has a flexible options-parsing mechanism that allows you to
     specify settings to pretty much any element of the table.
@@ -70,8 +71,9 @@ FUNCTIONS
     Options include:
 
     header => 1 | 0
-        If set to 1, a basic "CGI" header and leading "HTML" is printed out.
-        Useful if you're really looking for quick and dirty. Defaults to 0.
+        If set to "1", a basic "CGI" header and leading "HTML" is printed
+        out. Useful if you're really looking for quick and dirty. Defaults
+        to "0".
 
     htmlize => 1 | 0
         If set to 1, then all values will be run through a simple filter
@@ -149,6 +151,10 @@ FUNCTIONS
         rows horizontally, each element of data will become a column. This
         will be described more below under "render()".
 
+    text => 'string'
+        Just like FormBuilder, this text is printed out for you to easily
+        annotate your table.
+
     body => {opt => val, opt => val}
     font => {opt => val, opt => val}
     table => {opt => val, opt => val}
@@ -157,7 +163,7 @@ FUNCTIONS
     tr => {opt => val, opt => val}
         These options can be used to set attributes to be used on the
         applicable tag. For example, if you wanted the table width to be
-        "95%" and the "border" to be 1, you would say:
+        "95%" and the "border" to be "1", you would say:
 
             my $qt = HTML::QuickTable->new(table => {width => '95%', border => 1});
 
@@ -187,6 +193,7 @@ FUNCTIONS
         placed into the output "HTML" verbatim.
 
   render(\@data | \%data | $object)
+
     The "render()" function can accept either an "arrayref", "hashref", or
     "object". It then recursively expands the data per the options you
     specified to "new()". Each data structure is rendered differently:
@@ -263,11 +270,20 @@ FUNCTIONS
         That would create the same "HTML" as above, except the first column
         label would be "user".
 
+NOTES
+    The 'B' option to 'labels' is currently broken, due to the fact that
+    "render()" recursively calls itself and thus loses track of where it is.
+    But who the heck puts labels at the *bottom* of an HTML table??
+
+    If you run into a bug, please DO NOT submit it via "rt.cpan.org", it
+    causes me alot of extra work. Email me at the below address, and include
+    the version string your eyes are about to pass over.
+
 VERSION
-    $Id: QuickTable.pm,v 1.10 2002/08/29 18:10:57 nwiger Exp $
+    $Id: QuickTable.pm,v 1.11 2003/10/16 00:24:43 nwiger Exp $
 
 AUTHOR
-    Copyright (c) 2001-2002 Nathan Wiger <nate@wiger.org>. All Rights
+    Copyright (c) 2001-2003 Nathan Wiger <nate@wiger.org>. All Rights
     Reserved.
 
     This module is free software; you may copy this under the terms of the

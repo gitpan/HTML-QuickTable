@@ -1,6 +1,6 @@
 QuickTable.pm
 Makefile.PL
 README
-test.pl
 Changes
 MANIFEST
+t/alltests.t
