@@ -1,6 +1,29 @@
-#!/usr/bin/perl -I. -w
+head	1.1;
+access;
+symbols;
+locks; strict;
+comment	@# @;
 
-# Copyright (c) 2001-2005 Nathan Wiger <nate@sun.com>
+
+1.1
+date	2005.05.09.20.24.09;	author nwiger;	state Exp;
+branches;
+next	;
+
+
+desc
+@tests
+@
+
+
+1.1
+log
+@Initial revision
+@
+text
+@#!/usr/bin/perl -I. -w
+
+# Copyright (c) 2001-2005 Nathan Wiger <nate@@sun.com>
 # simple tests for HTML::QuickTable
 
 use strict;
@@ -9,7 +32,7 @@ BEGIN { plan tests => 8 };
 
 use HTML::QuickTable;
 
-my @tests = (
+my @@tests = (
     {
         new => {
             font => 'arial',
@@ -118,8 +141,8 @@ my @tests = (
         },
         dat => [ 
                  ['User', 'Name', 'Ext', 'Email'],
-                 [ 'nwiger', 'Nathan Wiger', 'x43264', 'nate@wiger.org' ],
-                 [ 'jbobson', 'Jim Bobson', 'x92811', 'jim@bobson.com' ],
+                 [ 'nwiger', 'Nathan Wiger', 'x43264', 'nate@@wiger.org' ],
+                 [ 'jbobson', 'Jim Bobson', 'x92811', 'jim@@bobson.com' ],
                ],
         res => 'Content-type: text/html; charset=iso-8859-1
 
@@ -145,8 +168,8 @@ my @tests = (
  </tr>
  <tr>
   <th>Email</th>
-  <td>nate@wiger.org</td>
-  <td>jim@bobson.com</td>
+  <td>nate@@wiger.org</td>
+  <td>jim@@bobson.com</td>
  </tr>
 </table></body></html>
 ',
@@ -165,8 +188,8 @@ my @tests = (
         },
         dat => [ 
                  ['User', 'Name', 'Ext', 'Email'],
-                 [ 'nwiger', 'Nathan Wiger', undef, 'nate@wiger.org' ],
-                 [ 'jbobson', undef, 'x92811', 'jim@bobson.com' ],
+                 [ 'nwiger', 'Nathan Wiger', undef, 'nate@@wiger.org' ],
+                 [ 'jbobson', undef, 'x92811', 'jim@@bobson.com' ],
                ],
         res => 'Content-type: text/html; charset=iso-8859-1
 
@@ -195,8 +218,8 @@ Hey there!
  </tr>
  <tr>
   <td>Email</td>
-  <td><a href="mailto:nate@wiger.org">nate@wiger.org</a></td>
-  <th><a href="mailto:jim@bobson.com">jim@bobson.com</a></th>
+  <td><a href="mailto:nate@@wiger.org">nate@@wiger.org</a></td>
+  <th><a href="mailto:jim@@bobson.com">jim@@bobson.com</a></th>
  </tr>
 </table></body></html>
 ',
@@ -322,7 +345,7 @@ Hey there!
 
 );
 
-for (@tests) {
+for (@@tests) {
     my $qt = HTML::QuickTable->new(%{$_->{new}});
     my $qtr = $qt->render($_->{dat});
     my $res = ok($qtr, $_->{res});
@@ -341,3 +364,4 @@ for (@tests) {
     }
 }
 
+@

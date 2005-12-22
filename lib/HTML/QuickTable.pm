@@ -10,74 +10,89 @@ HTML::QuickTable - Quickly create fairly complex HTML tables
     use HTML::QuickTable;
 
     my $qt = HTML::QuickTable->new(
-                   font_face => 'arial',
-                   table_width => '95%',
-                   labels => 1
+                   table_width  => '95%',       # opt method 1
+                   td => {bgcolor => 'gray'},   # opt method 2
+                   font_face => 'arial',        # set font
+                   font => {face => 'arial'},   # same thing
+                   labels => 1,                 # make top <th>?
+                   stylesheet => 1,             # use stylesheet?
+                   styleclass => 'mytable',     # class to use
+                   useid  => 'results',         # id="results_r1c2" etc
+                   header => 0,                 # print header?
              );
 
     my $table1 = $qt->render(\@array_of_data);
 
     my $table2 = $qt->render(\%hash_of_keys_and_values);
 
-    my $table2 = $qt->render($object_with_param_method);
+    my $table3 = $qt->render($object_with_param_method);
 
 =cut
 
 use Carp;
 use strict;
-use vars qw($VERSION);
+use vars qw($VERSION %INDENT);
 
-$VERSION = do { my @r=(q$Revision: 1.11 $=~/\d+/g); sprintf "%d."."%02d"x$#r,@r };
-
-# Global counter to allow multiple render()'s with only one header
-my $SENT_HEADER = 0;
-my $L = 0;
+$VERSION = do { my @r=(q$Revision: 1.12 $=~/\d+/g); sprintf "%d."."%02d"x$#r,@r };
+%INDENT  = (
+   table => 0,
+   tr    => 1,
+   th    => 2,
+   td    => 2,
+);
 
 sub _expopts {
     # This is a general-purpose option-parsing routine that
     # puts stuff down one level if it has a _ in it; this
     # allows stuff like "td_height => 50" and "td => {height => 50}"
+    my $lev = shift || 0;
     my %opt = ();
-    $L++;
+    $lev++;
     while (@_) {
         my $key = shift;
         my $val = shift;
-        #warn "($L) $key = $val\n";
         if ($key =~ /^([a-zA-Z0-9]+)_(.*)/) {
             # looks like "td_height" or "font_face"
             $opt{$1}{$2} = $val;
         } elsif (ref $val eq 'HASH') {
             # this allows "table => {width => '95%'}"
-            $opt{$key} = _expopts(%$val);
-        } elsif ($key eq 'font' && $L == 1) {
+            $opt{$key} = _expopts($lev, %$val);
+        } elsif ($key eq 'font' && $lev == 1) {
             # special catch for two options to be FormBuilder-like
             $opt{font}{face} = $val;
-        } elsif ($key eq 'border' && $L == 1) {
-            $opt{table}{border} = $val;
-        } elsif ($key eq 'lalign' && $L == 1) {
+        } elsif ($key eq 'lalign' && $lev == 1) {
             $opt{th}{align} = $val;
+        } elsif ($key eq 'border' && $lev == 1) {
+            # useful shortcut
+            $opt{table}{border} = $val;
         } else {
             # put regular options in the top-level space
             $opt{$key} = $val;
         }
     }
-    $L--;
+    $lev--;
     return wantarray ? %opt : \%opt;
 }
 
 sub new {
     my $self = shift;
     my $class = ref($self) || $self;
-    my %opt = _expopts(@_);
+    my %opt = _expopts(0, @_);
 
     # counters
     $opt{_level} = 0;
-    $SENT_HEADER = 0;
+    $opt{_sentheader} = 0;
 
     # special options
     $opt{table}{border} = delete $opt{border} if exists $opt{border};  # legacy
     $opt{body} ||= {bgcolor => 'white'};
     $opt{null} ||= '';      # prevents warnings
+
+    # stylesheet handling
+    if ($opt{stylesheet}) {
+        $opt{styleclass} ||= 'qt';
+        delete $opt{font};  # kill font
+    }
 
     # setup our font tag separately
     # do this here or else every call to render() must do it
@@ -99,12 +114,19 @@ sub _escapeurl ($) {
 }
 
 sub _escapehtml ($) {
-    defined(my $toencode = shift) or return;
-    # must do these in order or the browser won't decode right
-    $toencode =~ s!&!&amp;!g;
-    $toencode =~ s!<!&lt;!g;
-    $toencode =~ s!>!&gt;!g;
-    $toencode =~ s!"!&quot;!g;
+    defined(my $toencode = shift) or return '';
+    eval { require  HTML::Entities };
+    if ($@) {
+        # not found; use very basic built-in HTML escaping
+        $toencode =~ s!&!&amp;!g;
+        $toencode =~ s!<!&lt;!g;
+        $toencode =~ s!>!&gt;!g;
+        $toencode =~ s!"!&quot;!g;
+        return $toencode;
+    } else {
+        # dispatch to HTML::Entities
+        return HTML::Entities::encode($toencode);
+    }
     return $toencode;
 }
 
@@ -117,7 +139,7 @@ sub _tag ($;@) {
     while (@_) {
         # this cleans out all the internal junk kept in each data
         # element, returning everything else (for an html tag)
-        my $key = shift;
+        my $key = lc shift;
         my $val = _escapehtml shift;    # minimalist HTML escaping
         push @tag, qq($key="$val") unless $saw{$key}++;
     }
@@ -126,11 +148,6 @@ sub _tag ($;@) {
 
 sub _tohtml ($) {
     defined(my $text = shift) or return;
-
-    # First, wrap any text that is too long (which we define as 120 chars,
-    # since the web has wide windows)
-    #$text =~ s! +$!!gm;      # trailing \n's
-    #$text =~ s!(.{120}\w*) *[^\n]!$1\n!g;
 
     # Need to catch the < and > commonly used in emails
     $text = _escapehtml($text);
@@ -155,11 +172,64 @@ sub _toname ($) {
     return $name;
 }
 
-# This recursively renders a data structure into a table
+# These handle styleclass and id generation, if requested
+sub _getclass {
+    my $self = shift;
+    return '' unless $self->{stylesheet};
+    my $row  = shift || 0;  # is a row
 
+    # if styleclass is an array, alternate between
+    my $class = '';
+    if (ref $self->{styleclass} eq 'ARRAY') {
+        if ($row && $self->{_notfirstrow}) {   # only alternate rows
+            push @{$self->{_tmpclass}||=[]}, shift @{$self->{styleclass}};
+            unless (@{$self->{styleclass}}) {
+                # have pushed thru all, so start over
+                $self->{styleclass} = delete $self->{_tmpclass};
+            }
+        }
+        $class = $self->{styleclass}[0];
+    } else {
+        $class = $self->{styleclass};
+    }
+    return $class;
+}
+
+# Generate a unique id for each element
+sub _getid {
+    my $self = shift;
+    return '' unless $self->{useid};
+    my $base = join '', @_;  # rest is 'r', 42, 'c', 15, etc
+    return $base ? "$self->{useid}_$base" : $self->{useid};
+}
+
+# Keep track of the appropriate indent
+sub _indent {
+    local $^W = 0;
+    my $self = shift;
+    my $what = shift;   # element name
+    return '  ' x $INDENT{$what};
+    my $last = $self->{_lastidt} || '';
+    if (! $last) {
+        # first layer
+        $self->{_indent} = 0;
+    } elsif ($what eq $last) {
+        # nothing, same
+        $self->{_indent} ||= 0
+    } elsif ($INDENT{$what} > $INDENT{$last}) {
+        # use it as a base
+        $self->{_indent}++;
+    } elsif ($INDENT{$what} < $INDENT{$last}) {
+        # we're nesting
+        $self->{_indent}--;
+    }
+    $self->{_lastidt} = $what;
+    return '  ' x ($self->{_indent} * $INDENT{$last});
+}
+
+# This recursively renders a data structure into a table
 sub render {
     # Do the work and return as a scalar
-    #$CURRENT_ROW++;
     my $self = shift;
     my($data, $html) = ('','');
     my $ref = ref $_[0];
@@ -171,7 +241,7 @@ sub render {
         # shift it
         $data = shift;
     } elsif (! $self->{_level}) {
-        croak 'Argument to render() must be \@array, \%hash, or $object';
+        croak '[HTML::QuickTable] Argument to render() must be \@array, \%hash, or $object';
     } else {
         $ref = 'ARRAY';
         $data = [ @_ ]; 
@@ -183,8 +253,11 @@ sub render {
     # this sub is recursively called.
 
     if ($ref eq 'ARRAY') {
+
         # create our opening table tag
         my $tab = $self->{_level} ? {width => '100%'} : $self->{table};
+        $tab->{id}    = $self->_getid    if $self->{useid};
+        $tab->{class} = $self->_getclass if $self->{stylesheet};
         $html .= _tag('table', %$tab) . "\n" unless ++$self->{_level} == 2;
 
         my @tmprow = ();
@@ -205,8 +278,13 @@ sub render {
 
         # Now, walk all arrays in the same manner, since vert's were rearranged
         my $colnum = 0;
+        $self->{_rownum} ||= 0;
         for my $row (@tmprow) {
-            $html .= _tag('tr', %{$self->{tr}}) unless $self->{_level} == 2;
+            unless ($self->{_level} == 2) {
+                $self->{tr}{id}    = $self->_getid('r', ++$self->{_rownum}) if $self->{useid};
+                $self->{tr}{class} = $self->_getclass(1) if $self->{stylesheet};
+                $html .= ' ' . _tag('tr', %{$self->{tr}}) . "\n";
+            }
             if ($self->{_level} == 1) {
                 $html .= $self->render($row);
             }
@@ -220,14 +298,19 @@ sub render {
                       || ($l =~ /R/i && $colnum == (@tmprow-1))
                     ) {
                         $td = 'th';
-                    } elsif ($l =~ /B/i && ! $self->{_notfirstrow}) {
-                        croak "Sorry, labels => 'B' is currently broken - want to patch it?";
+                    } elsif ($l =~ /B/i) {
+                        croak "[HTML::QuickTable] Sorry, labels => 'B' is broken - want to patch it?";
                     }
                 }
+
+                # Catch td class stuff
+                $self->{$td}{id}    = $self->_getid('r', $self->{_rownum}, 'c', $colnum+1) if $self->{useid};
+                $self->{$td}{class} = $self->_getclass if $self->{stylesheet};
+
                 # Recurse data structures
                 if (ref $row) {
-                    $html .= _tag($td, %{$self->{$td}}) . $self->{_fo} 
-                           . $self->render($row) . "$self->{_fc}</$td>";
+                    $html .= '  ' . _tag($td, %{$self->{$td}}) . $self->{_fo} 
+                                  . $self->render($row) . $self->{_fc} . "</$td>\n";
                 }
                 else {
                     $row = _toname($row) if $self->{nameopts} && $td eq 'th';
@@ -237,13 +320,15 @@ sub render {
                         # "null", so alter HTML accordingly
                         $row = $self->{null};
                         $tdptr = $self->{nulltags} if $self->{nulltags};
+                        $tdptr->{id}    = $self->_getid('r', $self->{_rownum}, 'c', $colnum+1) if $self->{useid};
+                        $tdptr->{class} ||= $self->_getclass if $self->{stylesheet};
                     }
-                    $html .= _tag($td, %{$tdptr}) . $self->{_fo}
-                           . "$row$self->{_fc}</$td>";
+                    $html .= '  ' . _tag($td, %{$tdptr}) . $self->{_fo}
+                                  . $row . $self->{_fc} . "</$td>\n";
                 }
             }
             unless ($self->{_level} == 2) {
-                $html .= "</tr>\n";
+                $html .= " </tr>\n";
             }
             $colnum++;
         }
@@ -319,20 +404,22 @@ sub render {
         }
     }
 
-    if ($self->{header} && ! $self->{_level} && ! $SENT_HEADER++) {
-        my $title = $self->{title} ? "<title>$self->{title}</title>" : '';
-        my $h3    = $self->{title} ? "<h3>$self->{title}</h3>" : '';
-        my $text  = $self->{text} || '';
-        $html = "Content-type: text/html\n\n<html>"
-              . _tag('head', %{$self->{head}}) . $title . '</head>'
-              . _tag('body', %{$self->{body}}) . _tag('font', %{$self->{font}})
-              . $h3 . $text . $html . "</font></body></html>\n";
+    if ($self->{header} && ! $self->{_level} && ! $self->{_sentheader}++) {
+        my $title = $self->{title} ? ('<title>'._escapehtml($self->{title})."</title>\n") : '';
+        my $h3    = $self->{title} ? "<h3>$self->{title}</h3>\n" : '';
+        my $style = ($self->{stylesheet} && $self->{stylesheet} ne 1)
+                        ? qq(<link rel="stylesheet" href="$self->{stylesheet}" />\n) : '';
+        my $text  = $self->{text} ? "$self->{text}\n" : '';
+
+        $html = "Content-type: text/html; charset=iso-8859-1\n\n" . '<html>'    # fuck doctypes, really
+              . "\n" . _tag('head', %{$self->{head}}) . "\n" . $style . $title . "</head>\n"
+              . _tag('body', %{$self->{body}}) . $self->{_fo} . "\n" 
+              . $h3 . $text . $html . $self->{_fc} . "</body></html>\n";
     }
 
     # detect what row we're in by counting down and up
     $self->{_notfirstrow} = $self->{_level};
 
-    #$CURRENT_ROW--;
     return $html;
 }
 
@@ -345,7 +432,7 @@ __END__
 This modules lets you easily create HTML tables. Like B<CGI::FormBuilder>,
 this module does a lot of thinking for you. For a comprehensive
 module that gives you the ability to tweak every aspect of table building,
-see B<HTML::Table> or B<CGI.pm>. This one gives you a lot of control,
+see B<HTML::Table> or B<Data::Table>. This one gives you a lot of control,
 but is really designed as an easy way to expand arbitrary data structures.
 
 The simplest table can be created with nothing more than:
@@ -436,7 +523,7 @@ Since the labels are placed in C<< <th> >> tags, you can then use
 the extra C<HTML> options described below to alter the way that the
 labels look. 
 
-You can also now set this to a string that includes the characters
+You can also set this to a string that includes the characters
 L, T, R, and B, to specify that C<< <th> >> tags should be created
 for the Left, Top, Right, and Bottom rows and columns. So for example:
 
@@ -475,22 +562,90 @@ Would result in an element like the following for null fields:
 
 Make sense?
 
+=item stylesheet => 1 | '/path/to/style.css'
+
+If set, then any font settings are ignored and instead all table
+elements are wrapped with a C<class=> attribute. The class name
+is whatever C<styleclass> is set to (see below). See also the
+C<useid> option to generate C<id> tags in an intelligent way.
+
+=item styleclass => $string | \@array
+
+This used as a style class to use if the above setting is used.
+If set to a string, it is passed directly to the C<class> tag.
+If set to an arrayref, then those styles are alternated between
+on a row-by-row (C<tr>) basis. For example:
+
+    styleclass => [qw(one two)]
+
+Would yield C<XHTML> similar to:
+
+    <table class="one">
+      <tr class="one">
+        <td class="one">a</td>
+        <td class="one">b</td>
+        <td class="one">c</td>
+        <td class="one">d</td>
+      </tr>
+      <tr class="two">
+        <td class="two">e</td>
+        <td class="two">f</td>
+        <td class="two">g</td>
+        <td class="two">h</td>
+      </tr>
+    </table>
+
+Notice that the table gets the style of the first array element.
+
+=item text => $string
+
+Just like B<FormBuilder>, this text is printed out for you to easily
+annotate your table.
+
 =item title => $string
 
 If you set C<< header => 1 >>, then you can also specify the C<title>
 to be prefixed to the document. Otherwise this option is ignored.
+
+=item useid => $baseid
+
+If set, then unique C<id> tags are automatically generated for each
+and every table element, allowing you to address the entire table
+on a per-element basis via Javascript or CSS. These tags take the
+format:
+
+    $baseid[_rX[cY]]
+
+Where C<X> is the row number and C<Y> is the column number. So
+this setting:
+
+    useid => 'results'
+
+Would yield C<XHTML> like:
+
+    <table id="results">
+      <tr id="results_r1">
+        <th id="results_r1c1">n1</th>
+        <th id="results_r1c2">n2</th>
+        <th id="results_r1c3">n3</th>
+        <th id="results_r1c4">n4</th>
+      </tr>
+      <tr id="results_r2">
+        <td id="results_r2c1">1</td>
+        <td id="results_r2c2">2</td>
+        <td id="results_r2c3">3</td>
+        <td id="results_r2c4">4</td>
+      </tr>
+    </table>
+
+Notice that the table gets the baseid verbatim.
 
 =item vertical => 1 | 0
 
 If you set this to 1, then it fundamentally changes the way in which
 data is expanded. Instead of walking the data structure and building
 rows horizontally, each element of data will become a column. This
-will be described more below under C<render()>.
-
-=item text => 'string'
-
-Just like B<FormBuilder>, this text is printed out for you to easily
-annotate your table.
+option is described more below under C<render()>.
 
 =item body => {opt => val, opt => val}
 
@@ -516,7 +671,7 @@ Of course, you can specify as many different options as you want:
                                    td    => {class => 'td_el'},
                                    font  => {face => 'arial,helvetica'} );
 
-As an alternative form, keep reading:
+As an alternative form, you can also use:
 
 =item body_opt => val
 
@@ -614,8 +769,8 @@ Then some Major Magic (tm) happens and you'll get something like this:
     </table>
 
 Notice that the keys were sorted alphabetically and output in order.
-Also, note that the C<key> is not labeled in the C<< <th> >>. To remedy
-this, you must specify the C<keylabel> option to C<new()>:
+But, note that the top-level C<key> is not labeled in the C<< <th> >>.
+To change this, you must specify the C<keylabel> option to C<new()>:
 
     my $qt = HTML::QuickTable->new(keylabel => 'user');
     # ...
@@ -632,17 +787,21 @@ The 'B' option to 'labels' is currently broken, due to the fact that
 C<render()> recursively calls itself and thus loses track of where
 it is. But who the heck puts labels at the I<bottom> of an HTML table??
 
-If you run into a bug, please DO NOT submit it via C<rt.cpan.org>, it 
-causes me alot of extra work. Email me at the below address, and include
-the version string your eyes are about to pass over.
+If you run into a bug, please DO NOT submit it via C<rt.cpan.org> - that
+just causes me alot of extra work. Email me at the below address, and
+include the version string your eyes are about to pass over.
+
+=head1 SEE ALSO
+
+L<HTML::Table>, L<Data::Table>, L<SQL::Abstract>, L<CGI::FormBuilder>
 
 =head1 VERSION
 
-$Id: QuickTable.pm,v 1.11 2003/10/16 00:24:43 nwiger Exp $
+$Id: QuickTable.pm,v 1.12 2005/05/10 21:10:52 nwiger Exp $
 
 =head1 AUTHOR
 
-Copyright (c) 2001-2003 Nathan Wiger <nate@wiger.org>. All Rights Reserved.
+Copyright (c) 2001-2005 Nathan Wiger <nate@wiger.org>. All Rights Reserved.
 
 This module is free software; you may copy this under the terms of
 the GNU General Public License, or the Artistic License, copies of

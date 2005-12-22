@@ -1,15 +1,22 @@
 
 RCS file: /home/nwiger/perlmod/lib/HTML/RCS/QuickTable.pm,v
 Working file: /home/nwiger/perlmod/lib/HTML/QuickTable.pm
-head: 1.11
+head: 1.12
 branch:
 locks: strict
 access list:
 symbolic names:
 keyword substitution: kv
-total revisions: 11;	selected revisions: 11
+total revisions: 12;	selected revisions: 12
 description:
 HTML::QuickTable - Quickly create fairly complex HTML tables
+----------------------------
+revision 1.12
+date: 2005/05/10 21:10:52;  author: nwiger;  state: Exp;  lines: +227 -68
+- added XHTML-compliant tag closings
+- added 'stylesheet' and 'styleclass' options
+- included support of rotating styles via an \@array to 'styleclass'
+- updated documentation
 ----------------------------
 revision 1.11
 date: 2003/10/16 00:24:43;  author: nwiger;  state: Exp;  lines: +58 -34

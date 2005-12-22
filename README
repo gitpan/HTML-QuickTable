@@ -5,22 +5,28 @@ SYNOPSIS
         use HTML::QuickTable;
 
         my $qt = HTML::QuickTable->new(
-                       font_face => 'arial',
-                       table_width => '95%',
-                       labels => 1
+                       table_width  => '95%',       # opt method 1
+                       td => {bgcolor => 'gray'},   # opt method 2
+                       font_face => 'arial',        # set font
+                       font => {face => 'arial'},   # same thing
+                       labels => 1,                 # make top <th>?
+                       stylesheet => 1,             # use stylesheet?
+                       styleclass => 'mytable',     # class to use
+                       useid  => 'results',         # id="results_r1c2" etc
+                       header => 0,                 # print header?
                  );
 
         my $table1 = $qt->render(\@array_of_data);
 
         my $table2 = $qt->render(\%hash_of_keys_and_values);
 
-        my $table2 = $qt->render($object_with_param_method);
+        my $table3 = $qt->render($object_with_param_method);
 
 DESCRIPTION
     This modules lets you easily create HTML tables. Like CGI::FormBuilder,
     this module does a lot of thinking for you. For a comprehensive module
     that gives you the ability to tweak every aspect of table building, see
-    HTML::Table or CGI.pm. This one gives you a lot of control, but is
+    HTML::Table or Data::Table. This one gives you a lot of control, but is
     really designed as an easy way to expand arbitrary data structures.
 
     The simplest table can be created with nothing more than:
@@ -28,8 +34,8 @@ DESCRIPTION
         my $qt = HTML::QuickTable->new;
         print $qt->render(\@data);
 
-    Where "@data" would be an array holding your data structure. For
-    example, the data structure:
+    Where @data would be an array holding your data structure. For example,
+    the data structure:
 
         @data = (
             [ 'nwiger', 'Nathan Wiger', 'x43264', 'nate@wiger.org' ],
@@ -62,8 +68,7 @@ DESCRIPTION
 
 FUNCTIONS
   new(opt => val, opt => val)
-
-    The "new()" function takes a list of options and returns a "$qt" object,
+    The "new()" function takes a list of options and returns a $qt object,
     which can then be used to "render()" different data. The "new()"
     function has a flexible options-parsing mechanism that allows you to
     specify settings to pretty much any element of the table.
@@ -71,9 +76,8 @@ FUNCTIONS
     Options include:
 
     header => 1 | 0
-        If set to "1", a basic "CGI" header and leading "HTML" is printed
-        out. Useful if you're really looking for quick and dirty. Defaults
-        to "0".
+        If set to 1, a basic "CGI" header and leading "HTML" is printed out.
+        Useful if you're really looking for quick and dirty. Defaults to 0.
 
     htmlize => 1 | 0
         If set to 1, then all values will be run through a simple filter
@@ -104,9 +108,9 @@ FUNCTIONS
         extra "HTML" options described below to alter the way that the
         labels look.
 
-        You can also now set this to a string that includes the characters
-        L, T, R, and B, to specify that "<th>" tags should be created for
-        the Left, Top, Right, and Bottom rows and columns. So for example:
+        You can also set this to a string that includes the characters L, T,
+        R, and B, to specify that "<th>" tags should be created for the
+        Left, Top, Right, and Bottom rows and columns. So for example:
 
             labels => 'LT'
 
@@ -141,19 +145,84 @@ FUNCTIONS
 
         Make sense?
 
+    stylesheet => 1 | '/path/to/style.css'
+        If set, then any font settings are ignored and instead all table
+        elements are wrapped with a "class=" attribute. The class name is
+        whatever "styleclass" is set to (see below). See also the "useid"
+        option to generate "id" tags in an intelligent way.
+
+    styleclass => $string | \@array
+        This used as a style class to use if the above setting is used. If
+        set to a string, it is passed directly to the "class" tag. If set to
+        an arrayref, then those styles are alternated between on a
+        row-by-row ("tr") basis. For example:
+
+            styleclass => [qw(one two)]
+
+        Would yield "XHTML" similar to:
+
+            <table class="one">
+              <tr class="one">
+                <td class="one">a</td>
+                <td class="one">b</td>
+                <td class="one">c</td>
+                <td class="one">d</td>
+              </tr>
+              <tr class="two">
+                <td class="two">e</td>
+                <td class="two">f</td>
+                <td class="two">g</td>
+                <td class="two">h</td>
+              </tr>
+            </table>
+
+        Notice that the table gets the style of the first array element.
+
+    text => $string
+        Just like FormBuilder, this text is printed out for you to easily
+        annotate your table.
+
     title => $string
         If you set "header => 1", then you can also specify the "title" to
         be prefixed to the document. Otherwise this option is ignored.
+
+    useid => $baseid
+        If set, then unique "id" tags are automatically generated for each
+        and every table element, allowing you to address the entire table on
+        a per-element basis via Javascript or CSS. These tags take the
+        format:
+
+            $baseid[_rX[cY]]
+
+        Where "X" is the row number and "Y" is the column number. So this
+        setting:
+
+            useid => 'results'
+
+        Would yield "XHTML" like:
+
+            <table id="results">
+              <tr id="results_r1">
+                <th id="results_r1c1">n1</th>
+                <th id="results_r1c2">n2</th>
+                <th id="results_r1c3">n3</th>
+                <th id="results_r1c4">n4</th>
+              </tr>
+              <tr id="results_r2">
+                <td id="results_r2c1">1</td>
+                <td id="results_r2c2">2</td>
+                <td id="results_r2c3">3</td>
+                <td id="results_r2c4">4</td>
+              </tr>
+            </table>
+
+        Notice that the table gets the baseid verbatim.
 
     vertical => 1 | 0
         If you set this to 1, then it fundamentally changes the way in which
         data is expanded. Instead of walking the data structure and building
         rows horizontally, each element of data will become a column. This
-        will be described more below under "render()".
-
-    text => 'string'
-        Just like FormBuilder, this text is printed out for you to easily
-        annotate your table.
+        option is described more below under "render()".
 
     body => {opt => val, opt => val}
     font => {opt => val, opt => val}
@@ -163,7 +232,7 @@ FUNCTIONS
     tr => {opt => val, opt => val}
         These options can be used to set attributes to be used on the
         applicable tag. For example, if you wanted the table width to be
-        "95%" and the "border" to be "1", you would say:
+        "95%" and the "border" to be 1, you would say:
 
             my $qt = HTML::QuickTable->new(table => {width => '95%', border => 1});
 
@@ -173,7 +242,7 @@ FUNCTIONS
                                            td    => {class => 'td_el'},
                                            font  => {face => 'arial,helvetica'} );
 
-        As an alternative form, keep reading:
+        As an alternative form, you can also use:
 
     body_opt => val
     font_opt => val
@@ -193,7 +262,6 @@ FUNCTIONS
         placed into the output "HTML" verbatim.
 
   render(\@data | \%data | $object)
-
     The "render()" function can accept either an "arrayref", "hashref", or
     "object". It then recursively expands the data per the options you
     specified to "new()". Each data structure is rendered differently:
@@ -260,8 +328,8 @@ FUNCTIONS
             </table>
 
         Notice that the keys were sorted alphabetically and output in order.
-        Also, note that the "key" is not labeled in the "<th>". To remedy
-        this, you must specify the "keylabel" option to "new()":
+        But, note that the top-level "key" is not labeled in the "<th>". To
+        change this, you must specify the "keylabel" option to "new()":
 
             my $qt = HTML::QuickTable->new(keylabel => 'user');
             # ...
@@ -275,15 +343,18 @@ NOTES
     "render()" recursively calls itself and thus loses track of where it is.
     But who the heck puts labels at the *bottom* of an HTML table??
 
-    If you run into a bug, please DO NOT submit it via "rt.cpan.org", it
-    causes me alot of extra work. Email me at the below address, and include
-    the version string your eyes are about to pass over.
+    If you run into a bug, please DO NOT submit it via "rt.cpan.org" - that
+    just causes me alot of extra work. Email me at the below address, and
+    include the version string your eyes are about to pass over.
+
+SEE ALSO
+    HTML::Table, Data::Table, SQL::Abstract, CGI::FormBuilder
 
 VERSION
-    $Id: QuickTable.pm,v 1.11 2003/10/16 00:24:43 nwiger Exp $
+    $Id: QuickTable.pm,v 1.12 2005/05/10 21:10:52 nwiger Exp $
 
 AUTHOR
-    Copyright (c) 2001-2003 Nathan Wiger <nate@wiger.org>. All Rights
+    Copyright (c) 2001-2005 Nathan Wiger <nate@wiger.org>. All Rights
     Reserved.
 
     This module is free software; you may copy this under the terms of the
